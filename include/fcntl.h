@@ -171,14 +171,42 @@ ssize_t tee(int, int, size_t, unsigned);
 #define F_GETLK64 F_GETLK
 #define F_SETLK64 F_SETLK
 #define F_SETLKW64 F_SETLKW
+#define off64_t off_t
 #define flock64 flock
+#ifdef __cplusplus
+/* This is less than ideal as the preprocessor is unaware of C++'s namespaces.
+ * However, as we don't have the va_arg versions of open() and openat()
+ * this is the only way that we can pass variadic arguments in.
+ */
+#define open64(path, oflag, ...)	open(path, oflag, __VA_ARGS__)
+#define openat64(fd, path, oflag, ...)	openat(fd, path, oflag, __VA_ARGS)
+inline int creat64(const char *path, mode_t mode)
+{
+	return creat(path, mode);
+}
+
+inline int lockf64(int fd, int cmd, off64_t len)
+{
+	return lockf(fd, cmd, len);
+}
+
+inline int posix_fadvise64(int fd, off64_t offset, off64_t len, int advice)
+{
+	return posix_fadvise(fd, offset, len, advice);
+}
+
+inline int posix_fallocate64(int fd, off64_t offset, off64_t len)
+{
+	return posix_fallocate(fd, offset, len);
+}
+#else
 #define open64 open
 #define openat64 openat
 #define creat64 creat
 #define lockf64 lockf
 #define posix_fadvise64 posix_fadvise
 #define posix_fallocate64 posix_fallocate
-#define off64_t off_t
+#endif
 #endif
 
 #ifdef __cplusplus

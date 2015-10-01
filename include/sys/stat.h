@@ -96,15 +96,41 @@ int lchmod(const char *, mode_t);
 #endif
 
 #if defined(_LARGEFILE64_SOURCE) || defined(_GNU_SOURCE)
-#define stat64 stat
-#define fstat64 fstat
-#define lstat64 lstat
-#define fstatat64 fstatat
+
 #define blkcnt64_t blkcnt_t
 #define fsblkcnt64_t fsblkcnt_t
 #define fsfilcnt64_t fsfilcnt_t
 #define ino64_t ino_t
 #define off64_t off_t
+
+#ifdef __cplusplus
+inline int stat64(const char *__restrict path, struct stat *__restrict buf)
+{
+	return stat(path, buf);
+}
+
+inline int fstat64(int fd, struct stat *buf)
+{
+	return fstat(fd, buf);
+}
+
+inline int lstat64(const char *__restrict path, struct stat *__restrict buf)
+{
+	return lstat(path, buf);
+}
+
+inline int fstatat64(int dirfd, const char *__restrict path,
+		struct stat *__restrict buf, int flags)
+{
+	return fstatat(dirfd, path, buf, flags);
+}
+#else
+#define stat64 stat
+#define fstat64 fstat
+#define lstat64 lstat
+#define fstatat64 fstatat
+#endif
+
 #endif
 
 #ifdef __cplusplus

@@ -185,6 +185,47 @@ int fputs_unlocked(const char *, FILE *);
 #endif
 
 #if defined(_LARGEFILE64_SOURCE) || defined(_GNU_SOURCE)
+
+#define fpos64_t fpos_t
+#define off64_t off_t
+
+#ifdef __cplusplus
+inline FILE *tmpfile64(void)
+{
+	return tmpfile();
+}
+
+inline FILE *fopen64(const char *__restrict path, const char *__restrict mode)
+{
+	return fopen(path, mode);
+}
+
+inline FILE *freopen64(const char *__restrict path,
+		const char *__restrict mode, FILE *__restrict stream)
+{
+	return freopen(path, mode, stream);
+}
+
+inline int fseeko64(FILE *file, off64_t offset, int whence)
+{
+	return fseeko(file, offset, whence);
+}
+
+inline off64_t ftello64(FILE *file)
+{
+	return ftello(file);
+}
+
+inline int fgetpos64(FILE *__restrict file, fpos64_t *__restrict pos)
+{
+	return fgetpos(file, pos);
+}
+
+inline int fsetpos64(FILE *file, const fpos64_t *pos)
+{
+	return fsetpos(file, pos);
+}
+#else
 #define tmpfile64 tmpfile
 #define fopen64 fopen
 #define freopen64 freopen
@@ -192,8 +233,8 @@ int fputs_unlocked(const char *, FILE *);
 #define ftello64 ftello
 #define fgetpos64 fgetpos
 #define fsetpos64 fsetpos
-#define fpos64_t fpos_t
-#define off64_t off_t
+#endif
+
 #endif
 
 #ifdef __cplusplus

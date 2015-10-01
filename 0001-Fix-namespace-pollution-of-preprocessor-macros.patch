@@ -1,0 +1,193 @@
+From f4551f46ac6f0a465c7a2ebe29e5acbab0c05dc1 Mon Sep 17 00:00:00 2001
+From: Chang Liu <cliu712@aucklanduni.ac.nz>
+Date: Fri, 10 Apr 2015 14:01:14 +0000
+Subject: [PATCH] Fix namespace pollution of preprocessor macros
+
+Several preprocessor macros defined in stdio.h and sys/stat.h don't play
+nicely with C++ namespaces.
+
+For instance, in stdio.h, fopen64 is defined as
+  #define fopen64 fopen
+
+The following valid C++ code will fail to compile
+  namespace example {
+    enum func {
+      fopen, fopen64
+    }
+  }
+if the code includes <stdio.h> either directly or indirectly, because of
+duplicated definitions of the same identifier.
+
+This is to fix compilation of LLVM where the target info library defines
+enumerations of the target library symbols to generate, which coincide with
+preprocessor symbols defined in musl.
+---
+ include/fcntl.h    | 30 +++++++++++++++++++++++++++++-
+ include/stdio.h    | 45 +++++++++++++++++++++++++++++++++++++++++++--
+ include/sys/stat.h | 34 ++++++++++++++++++++++++++++++----
+ 3 files changed, 102 insertions(+), 7 deletions(-)
+
+diff --git a/include/fcntl.h b/include/fcntl.h
+index ebd5c30..0e15fd8 100644
+--- a/include/fcntl.h
++++ b/include/fcntl.h
+@@ -171,14 +171,42 @@ ssize_t tee(int, int, size_t, unsigned);
+ #define F_GETLK64 F_GETLK
+ #define F_SETLK64 F_SETLK
+ #define F_SETLKW64 F_SETLKW
++#define off64_t off_t
+ #define flock64 flock
++#ifdef __cplusplus
++/* This is less than ideal as the preprocessor is unaware of C++'s namespaces.
++ * However, as we don't have the va_arg versions of open() and openat()
++ * this is the only way that we can pass variadic arguments in.
++ */
++#define open64(path, oflag, ...)	open(path, oflag, __VA_ARGS__)
++#define openat64(fd, path, oflag, ...)	openat(fd, path, oflag, __VA_ARGS)
++inline int creat64(const char *path, mode_t mode)
++{
++	return creat(path, mode);
++}
++
++inline int lockf64(int fd, int cmd, off64_t len)
++{
++	return lockf(fd, cmd, len);
++}
++
++inline int posix_fadvise64(int fd, off64_t offset, off64_t len, int advice)
++{
++	return posix_fadvise(fd, offset, len, advice);
++}
++
++inline int posix_fallocate64(int fd, off64_t offset, off64_t len)
++{
++	return posix_fallocate(fd, offset, len);
++}
++#else
+ #define open64 open
+ #define openat64 openat
+ #define creat64 creat
+ #define lockf64 lockf
+ #define posix_fadvise64 posix_fadvise
+ #define posix_fallocate64 posix_fallocate
+-#define off64_t off_t
++#endif
+ #endif
+ 
+ #ifdef __cplusplus
+diff --git a/include/stdio.h b/include/stdio.h
+index 884d2e6..78ef3f5 100644
+--- a/include/stdio.h
++++ b/include/stdio.h
+@@ -185,6 +185,47 @@ int fputs_unlocked(const char *, FILE *);
+ #endif
+ 
+ #if defined(_LARGEFILE64_SOURCE) || defined(_GNU_SOURCE)
++
++#define fpos64_t fpos_t
++#define off64_t off_t
++
++#ifdef __cplusplus
++inline FILE *tmpfile64(void)
++{
++	return tmpfile();
++}
++
++inline FILE *fopen64(const char *__restrict path, const char *__restrict mode)
++{
++	return fopen(path, mode);
++}
++
++inline FILE *freopen64(const char *__restrict path,
++		const char *__restrict mode, FILE *__restrict stream)
++{
++	return freopen(path, mode, stream);
++}
++
++inline int fseeko64(FILE *file, off64_t offset, int whence)
++{
++	return fseeko(file, offset, whence);
++}
++
++inline off64_t ftello64(FILE *file)
++{
++	return ftello(file);
++}
++
++inline int fgetpos64(FILE *__restrict file, fpos64_t *__restrict pos)
++{
++	return fgetpos(file, pos);
++}
++
++inline int fsetpos64(FILE *file, const fpos64_t *pos)
++{
++	return fsetpos(file, pos);
++}
++#else
+ #define tmpfile64 tmpfile
+ #define fopen64 fopen
+ #define freopen64 freopen
+@@ -192,8 +233,8 @@ int fputs_unlocked(const char *, FILE *);
+ #define ftello64 ftello
+ #define fgetpos64 fgetpos
+ #define fsetpos64 fsetpos
+-#define fpos64_t fpos_t
+-#define off64_t off_t
++#endif
++
+ #endif
+ 
+ #ifdef __cplusplus
+diff --git a/include/sys/stat.h b/include/sys/stat.h
+index 82a6490..f22288d 100644
+--- a/include/sys/stat.h
++++ b/include/sys/stat.h
+@@ -96,15 +96,41 @@ int lchmod(const char *, mode_t);
+ #endif
+ 
+ #if defined(_LARGEFILE64_SOURCE) || defined(_GNU_SOURCE)
+-#define stat64 stat
+-#define fstat64 fstat
+-#define lstat64 lstat
+-#define fstatat64 fstatat
++
+ #define blkcnt64_t blkcnt_t
+ #define fsblkcnt64_t fsblkcnt_t
+ #define fsfilcnt64_t fsfilcnt_t
+ #define ino64_t ino_t
+ #define off64_t off_t
++
++#ifdef __cplusplus
++inline int stat64(const char *__restrict path, struct stat *__restrict buf)
++{
++	return stat(path, buf);
++}
++
++inline int fstat64(int fd, struct stat *buf)
++{
++	return fstat(fd, buf);
++}
++
++inline int lstat64(const char *__restrict path, struct stat *__restrict buf)
++{
++	return lstat(path, buf);
++}
++
++inline int fstatat64(int dirfd, const char *__restrict path,
++		struct stat *__restrict buf, int flags)
++{
++	return fstatat(dirfd, path, buf, flags);
++}
++#else
++#define stat64 stat
++#define fstat64 fstat
++#define lstat64 lstat
++#define fstatat64 fstatat
++#endif
++
+ #endif
+ 
+ #ifdef __cplusplus
+-- 
+2.3.2
+
